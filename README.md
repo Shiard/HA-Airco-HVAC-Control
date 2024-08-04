@@ -1,8 +1,10 @@
 # HA-Airco-HVAC-Control ![version](https://img.shields.io/badge/version-0.4-blue)
 
 This blueprint is for using the air conditioner automatically, based on a start and end temperature.
-Based of: https://community.home-assistant.io/t/hvac-airco-control-blueprint/650943 for the original
-https://github.com/OoM-JaN/Airco-HVAC-control/blob/main/HVAC%20airco%20control.yaml ![version](https://img.shields.io/badge/version-0.3-blue)
+
+Based of: https://community.home-assistant.io/t/hvac-airco-control-blueprint/650943 
+
+For the original: https://github.com/OoM-JaN/Airco-HVAC-control/blob/main/HVAC%20airco%20control.yaml ![version](https://img.shields.io/badge/version-0.3-blue)
 
 *Core Features*:
 * Climate control based on a scheduler
