@@ -10,6 +10,7 @@ blueprint:
     *Additional Safety Checks: Ensured the automation respects the specified start and stop times more clearly.
 
     Let me know what you think of this blueprint: https://github.com/Shiard/HA-Airco-HVAC-Control/tree/main
+    
     Original v0.3: https://github.com/OoM-JaN/Airco-HVAC-control/tree/main
   domain: automation
   input:
