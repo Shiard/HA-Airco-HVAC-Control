@@ -1,10 +1,10 @@
 blueprint:
   name: Airco HVAC control
   description: >
-    Automatic airco control with presence, weekdays, time window,
-    anti-flapping, heat/cool logic and optional notifications.
+    Automatic airco control with multiple person presence, weekdays,
+    time window, anti-flapping, heat/cool logic and optional notifications.
 
-    Version: 0.5
+    Version: 0.6
   domain: automation
 
   input:
@@ -14,12 +14,13 @@ blueprint:
         entity:
           domain: climate
 
-    presence_home:
-      name: Presence Home
-      default: group.presence_home_disabled
+    presence_persons:
+      name: Presence persons
+      description: Select the persons that should count as home.
       selector:
         entity:
-          domain: group
+          domain: person
+          multiple: true
 
     set_temperature_climate:
       name: Set temperature climate
@@ -144,13 +145,25 @@ mode: restart
 
 variables:
   climate_entity: !input climate
-  presence_home: !input presence_home
+  presence_persons: !input presence_persons
   hvac_mode: !input hvac_modes
   fan_mode: !input fan_modes
   set_temp: !input set_temperature_climate
   start_threshold: !input target_temperature_start
   stop_threshold: !input target_temperature_stop
   use_time_window: !input use_time_window
+  start_time: !input start_time
+  stop_time: !input stop_time
+  someone_home: >
+    {{ expand(presence_persons)
+      | selectattr('state', 'eq', 'home')
+      | list
+      | count > 0 }}
+  nobody_home: >
+    {{ expand(presence_persons)
+      | selectattr('state', 'eq', 'home')
+      | list
+      | count == 0 }}
 
 trigger:
   - platform: numeric_state
@@ -194,7 +207,7 @@ trigger:
     id: time_stop
 
   - platform: state
-    entity_id: !input presence_home
+    entity_id: !input presence_persons
     id: presence_change
 
 condition:
@@ -207,24 +220,30 @@ action:
         conditions:
           - condition: template
             value_template: "{{ is_state(climate_entity, 'off') }}"
+
           - condition: template
-            value_template: >
-              {{ states(presence_home) == 'home'
-                 or presence_home == 'group.presence_home_disabled' }}
+            value_template: "{{ someone_home }}"
+
           - condition: template
             value_template: >
               {{ not use_time_window
-                 or (start_time == stop_time)
-                 or now().strftime('%H:%M:%S') >= start_time and now().strftime('%H:%M:%S') < stop_time }}
+                or start_time == stop_time
+                or (now().strftime('%H:%M:%S') >= start_time
+                    and now().strftime('%H:%M:%S') < stop_time) }}
+
           - condition: template
             value_template: >
               {{
-                (hvac_mode == 'cool' and trigger.id in ['temp_above_start', 'time_start', 'presence_change'])
+                (hvac_mode == 'cool'
+                  and trigger.id in ['temp_above_start', 'time_start', 'presence_change'])
                 or
-                (hvac_mode == 'heat' and trigger.id in ['temp_below_start', 'time_start', 'presence_change'])
+                (hvac_mode == 'heat'
+                  and trigger.id in ['temp_below_start', 'time_start', 'presence_change'])
                 or
-                (hvac_mode in ['dry', 'fan_only'] and trigger.id in ['time_start', 'presence_change'])
+                (hvac_mode in ['dry', 'fan_only']
+                  and trigger.id in ['time_start', 'presence_change'])
               }}
+
         sequence:
           - action: climate.set_temperature
             target:
@@ -247,21 +266,19 @@ action:
         conditions:
           - condition: template
             value_template: "{{ not is_state(climate_entity, 'off') }}"
+
           - condition: template
             value_template: >
               {{
                 trigger.id == 'time_stop'
                 or
-                (
-                  trigger.id == 'presence_change'
-                  and states(presence_home) == 'not_home'
-                  and presence_home != 'group.presence_home_disabled'
-                )
+                (trigger.id == 'presence_change' and nobody_home)
                 or
                 (hvac_mode == 'cool' and trigger.id == 'temp_below_stop')
                 or
                 (hvac_mode == 'heat' and trigger.id == 'temp_above_stop')
               }}
+
         sequence:
           - action: climate.turn_off
             target:
