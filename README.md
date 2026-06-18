@@ -1,4 +1,4 @@
-# HA-Airco-HVAC-Control ![version](https://img.shields.io/badge/version-0.5-blue)
+# HA-Airco-HVAC-Control ![version](https://img.shields.io/badge/version-0.6-blue)
 
 This blueprint is for using the air conditioner automatically, based on a start and end temperature.
 
