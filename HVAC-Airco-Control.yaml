@@ -1,29 +1,21 @@
 blueprint:
   name: Airco HVAC control
   description: >
-    # This blueprint is for using the air conditioner automatically.
-    
-    **Version: 0.4**
-    
-    *Streamlined Triggers: Combined above and below triggers for temperature into one.
-    *Simplified Conditions: Reduced complexity in action conditions for better readability and maintainability.
-    *Additional Safety Checks: Ensured the automation respects the specified start and stop times more clearly.
+    Automatic airco control with presence, weekdays, time window,
+    anti-flapping, heat/cool logic and optional notifications.
 
-    Let me know what you think of this blueprint: https://github.com/Shiard/HA-Airco-HVAC-Control/tree/main
-    
-    Original v0.3: https://github.com/OoM-JaN/Airco-HVAC-control/tree/main
+    Version: 0.5
   domain: automation
+
   input:
     climate:
-      name: Entities climate
-      description: 'Select climate entities to be used.'
+      name: Climate entity
       selector:
         entity:
           domain: climate
 
     presence_home:
       name: Presence Home
-      description: 'Select the group consisting of person.'
       default: group.presence_home_disabled
       selector:
         entity:
@@ -32,7 +24,6 @@ blueprint:
     set_temperature_climate:
       name: Set temperature climate
       default: 22
-      description: 'Select the temperature to be set at climate.'
       selector:
         number:
           min: 15
@@ -42,8 +33,7 @@ blueprint:
           step: 0.5
 
     hvac_modes:
-      name: HVAC modes
-      description: 'Select the mode to be set to the air conditioner.'
+      name: HVAC mode
       default: heat
       selector:
         select:
@@ -54,8 +44,7 @@ blueprint:
             - fan_only
 
     fan_modes:
-      name: Fan modes
-      description: 'Select the ventilation speed to be set at the air conditioner.'
+      name: Fan mode
       default: auto
       selector:
         select:
@@ -66,46 +55,58 @@ blueprint:
             - mid
 
     target_temperature_start:
-      name: Target temperature start
+      name: Start threshold
       default: 18
-      description: 'Set the minimum start temperature.'
       selector:
         number:
           min: 15
           max: 30
           unit_of_measurement: °C
+          mode: slider
+          step: 0.5
+
+    target_temperature_stop:
+      name: Stop threshold
+      default: 23
+      selector:
+        number:
+          min: 15
+          max: 30
+          unit_of_measurement: °C
+          mode: slider
+          step: 0.5
+
+    temperature_delay:
+      name: Temperature delay
+      default: 5
+      selector:
+        number:
+          min: 0
+          max: 60
+          unit_of_measurement: minutes
           mode: slider
           step: 1
 
-    target_temperature_stop:
-      name: Target temperature stop
-      default: 23
-      description: 'Set the maximum temperature for shutdown.'
+    use_time_window:
+      name: Use time window
+      default: true
       selector:
-        number:
-          min: 15
-          max: 30
-          unit_of_measurement: °C
-          mode: slider
-          step: 1
+        boolean:
 
     start_time:
       name: Start time
       default: "00:00:00"
-      description: 'Set automatic operation start time.'
       selector:
         time:
 
     stop_time:
       name: Stop time
       default: "00:00:00"
-      description: 'Set automatic operation end time.'
       selector:
         time:
 
     weekday_options:
       name: Weekdays
-      description: 'Select the days of the week you would like the automation to run.'
       default:
         - mon
         - tue
@@ -133,61 +134,139 @@ blueprint:
             - label: Sunday
               value: sun
 
-mode: parallel
+    notify_action:
+      name: Optional notify action
+      default: []
+      selector:
+        action:
+
+mode: restart
+
 variables:
-  target_temperature_start: !input target_temperature_start
-  climate: !input climate
-  target_temperature_stop: !input target_temperature_stop
+  climate_entity: !input climate
   presence_home: !input presence_home
-  weekday_options: !input weekday_options
+  hvac_mode: !input hvac_modes
+  fan_mode: !input fan_modes
+  set_temp: !input set_temperature_climate
+  start_threshold: !input target_temperature_start
+  stop_threshold: !input target_temperature_stop
+  use_time_window: !input use_time_window
 
 trigger:
   - platform: numeric_state
     entity_id: !input climate
     attribute: current_temperature
     above: !input target_temperature_start
+    for:
+      minutes: !input temperature_delay
+    id: temp_above_start
+
+  - platform: numeric_state
+    entity_id: !input climate
+    attribute: current_temperature
+    below: !input target_temperature_start
+    for:
+      minutes: !input temperature_delay
+    id: temp_below_start
+
+  - platform: numeric_state
+    entity_id: !input climate
+    attribute: current_temperature
+    above: !input target_temperature_stop
+    for:
+      minutes: !input temperature_delay
+    id: temp_above_stop
+
+  - platform: numeric_state
+    entity_id: !input climate
+    attribute: current_temperature
     below: !input target_temperature_stop
-    id: climate_trigger
+    for:
+      minutes: !input temperature_delay
+    id: temp_below_stop
+
   - platform: time
     at: !input start_time
     id: time_start
+
   - platform: time
     at: !input stop_time
     id: time_stop
+
   - platform: state
     entity_id: !input presence_home
-    id: presence_trigger
+    id: presence_change
 
 condition:
   - condition: time
     weekday: !input weekday_options
 
 action:
-  - alias: Activate climate
-    if:
-      - "{{ is_state(climate, 'off') }}"
-      - "{{ (trigger.id == 'climate_trigger' and states(climate) == 'off') or (trigger.id == 'time_start' and states(presence_home) == 'home') }}"
-      - condition: time
-        after: !input start_time
-        before: !input stop_time
-      - "{{ states(presence_home) == 'home' or presence_home == 'group.presence_home_disabled' }}"
-    then:
-      - service: climate.set_temperature
-        data:
-          entity_id: !input climate
-          temperature: !input set_temperature_climate
-          hvac_mode: !input hvac_modes
-      - service: climate.set_fan_mode
-        data:
-          entity_id: !input climate
-          fan_mode: !input fan_modes
-  - alias: Disable climate
-    if:
-      - "{{ not is_state(climate, 'off') }}"
-      - "{{ trigger.id == 'presence_trigger' and trigger.to_state.state == 'not_home' }}"
-      - "{{ trigger.id == 'time_stop' }}"
-      - "{{ state_attr(climate, 'current_temperature')|float(0) > target_temperature_stop|float(0) }}"
-    then:
-      - service: climate.turn_off
-        target:
-          entity_id: !input climate
+  - choose:
+      - alias: Turn on climate
+        conditions:
+          - condition: template
+            value_template: "{{ is_state(climate_entity, 'off') }}"
+          - condition: template
+            value_template: >
+              {{ states(presence_home) == 'home'
+                 or presence_home == 'group.presence_home_disabled' }}
+          - condition: template
+            value_template: >
+              {{ not use_time_window
+                 or (start_time == stop_time)
+                 or now().strftime('%H:%M:%S') >= start_time and now().strftime('%H:%M:%S') < stop_time }}
+          - condition: template
+            value_template: >
+              {{
+                (hvac_mode == 'cool' and trigger.id in ['temp_above_start', 'time_start', 'presence_change'])
+                or
+                (hvac_mode == 'heat' and trigger.id in ['temp_below_start', 'time_start', 'presence_change'])
+                or
+                (hvac_mode in ['dry', 'fan_only'] and trigger.id in ['time_start', 'presence_change'])
+              }}
+        sequence:
+          - action: climate.set_temperature
+            target:
+              entity_id: !input climate
+            data:
+              temperature: !input set_temperature_climate
+              hvac_mode: !input hvac_modes
+
+          - action: climate.set_fan_mode
+            target:
+              entity_id: !input climate
+            data:
+              fan_mode: !input fan_modes
+
+          - choose:
+              - conditions: "{{ notify_action | count > 0 }}"
+                sequence: !input notify_action
+
+      - alias: Turn off climate
+        conditions:
+          - condition: template
+            value_template: "{{ not is_state(climate_entity, 'off') }}"
+          - condition: template
+            value_template: >
+              {{
+                trigger.id == 'time_stop'
+                or
+                (
+                  trigger.id == 'presence_change'
+                  and states(presence_home) == 'not_home'
+                  and presence_home != 'group.presence_home_disabled'
+                )
+                or
+                (hvac_mode == 'cool' and trigger.id == 'temp_below_stop')
+                or
+                (hvac_mode == 'heat' and trigger.id == 'temp_above_stop')
+              }}
+        sequence:
+          - action: climate.turn_off
+            target:
+              entity_id: !input climate
+
+          - choose:
+              - conditions: "{{ notify_action | count > 0 }}"
+                sequence: !input notify_action
