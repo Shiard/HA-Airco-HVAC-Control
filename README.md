@@ -4,7 +4,7 @@ This blueprint is for using the air conditioner automatically, based on a start 
 
 Based of: https://community.home-assistant.io/t/hvac-airco-control-blueprint/650943 
 
-For the original: https://github.com/OoM-JaN/Airco-HVAC-control/blob/main/HVAC%20airco%20control.yaml ![version](https://img.shields.io/badge/version-0.3-blue)
+For the original: https://github.com/OoM-JaN/Airco-HVAC-control/blob/main/HVAC%20airco%20control.yaml ![version](https://img.shields.io/badge/version-0.5-blue)
 
 *Core Features*:
 * Climate control based on a scheduler
